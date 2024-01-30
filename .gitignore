@@ -3,3 +3,5 @@ tmp
 video
 steps
 *.zip
+.idea
+*.jpg

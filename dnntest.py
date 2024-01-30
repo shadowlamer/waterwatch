@@ -16,7 +16,7 @@ available_volumes = [1.5, 5, 12, 19]
 available_percents = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
 num_classes_to_learn = len(available_volumes) * len(available_percents)
 
-criterion = nn.MSELoss(reduction='sum')
+criterion = nn.CrossEntropyLoss(reduction='sum')
 
 
 def create_classes_array(_list_size, _certain_class):

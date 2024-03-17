@@ -7,8 +7,9 @@ from PIL import Image
 IMG_OFFSET_BYTES = 8704
 
 class PyFeng:
-    def __init__(self, file="/dev/zero"):
+    def __init__(self, file="/dev/zero", size=None):
         self.file = file
+        self.size = size
 
     def get(self):
         fd = -1
@@ -18,6 +19,8 @@ class PyFeng:
             os.lseek(fd, IMG_OFFSET_BYTES, os.SEEK_SET)
             im_data = directio.read(fd, file_size - IMG_OFFSET_BYTES)
             image = Image.open(BytesIO(im_data))
+            if self.size is not None:
+                image = image.resize(self.size)
             warnings.resetwarnings()
             return image
         except Exception as e:

@@ -1,10 +1,13 @@
 import torch
+import math
 from torch import nn
 from torchvision.transforms import Compose, ToTensor
 
-available_volumes = [1.5, 5, 12, 19]
 DEFAULT_DEVICE = "cpu"
 DEFAULT_MODEL_PATH = "mynet.net"
+
+available_volumes = [1.5, 5, 12, 19]
+available_percents = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
 
 
 class BasicBlock(nn.Module):
@@ -71,8 +74,7 @@ class ResNet(nn.Module):
                 nn.BatchNorm2d(planes),
             )
 
-        layers = []
-        layers.append(block(self.inplanes, planes, stride, downsample))
+        layers = [block(self.inplanes, planes, stride, downsample)]
 
         self.inplanes = planes
 
@@ -109,7 +111,13 @@ class Model:
     def process(self, image):
         inputs = torch.stack([self.preprocess(image).clone().detach()])
         outputs = self.net(inputs)
-        volume = min(available_volumes, key=lambda x: abs(x - float(outputs[0][0])))
-        percent = int(outputs[0][1])
+        candidate_index = torch.argmax(outputs)
+        # print(candidate_index)
+
+        volume_index = math.ceil(candidate_index / len(available_percents))
+        percent_index = candidate_index % len(available_percents)
+
+        volume = available_volumes[volume_index]
+        percent = available_percents[percent_index]
         return volume, percent
 

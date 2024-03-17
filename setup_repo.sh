@@ -1,6 +1,6 @@
 #!/bin/bash
 
-ACTUAL_DATASET_LINK="https://disk.yandex.ru/d/Q_k62HCpIaTSTw"
+ACTUAL_DATASET_LINK=${1?"Usage: $0 <link_to_dataset_archive_on_yandex_disk>"}
 DOWNLOADS_DIR="tmp"
 DATASET_DIR="dataset"
 

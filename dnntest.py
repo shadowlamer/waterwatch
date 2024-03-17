@@ -12,17 +12,7 @@ from PIL import Image
 
 batch_size = 32
 
-available_volumes = [1.5, 5, 12, 19]
-available_percents = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
-num_classes_to_learn = len(available_volumes) * len(available_percents)
-
-criterion = nn.CrossEntropyLoss(reduction='sum')
-
-
-def create_classes_array(_list_size, _certain_class):
-    result = [0.0] * _list_size
-    result[_certain_class] = 1.0
-    return np.array(result)
+criterion = nn.MSELoss(reduction='sum')
 
 
 class BasicBlock(nn.Module):
@@ -140,11 +130,8 @@ class ImagesDataset(Dataset):
         if torch.is_tensor(idx):
             idx = idx.tolist()
 
+        img_hash = np.array([float(self.data[idx]['volume']), float(self.data[idx]['percent'])])
         img_name = self.data[idx]['filename']
-        volume = float(self.data[idx]['volume'])
-        percent = float(self.data[idx]['percent'])
-        class_to_learn = available_volumes.index(volume) * len(available_percents) + available_percents.index(percent)
-        img_hash = create_classes_array(num_classes_to_learn, class_to_learn)
         # print(img_name)
         img = Image.open(img_name).convert('RGB')
         t = self.transform(img).clone().detach()
@@ -185,7 +172,7 @@ def train(net, data_size=100, steps=100):
 
             print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / data_size:.8f}')
             running_loss = 0.0
-        torch.save(net, 'mynet')
+        torch.save(net, 'mynet_' + str(epoch))
     print('Finished Training')
 
 
@@ -197,10 +184,11 @@ preprocess = Compose([
 
 print(f"Using {device} device")
 
-# mynet = torch.load('mynet')
+# mynet.net = torch.load('mynet.net')
 
-mynet = ResNet(BasicBlock, [3, 4, 6, 3], num_classes_to_learn)
+mynet = ResNet(BasicBlock, [3, 4, 6, 3])
 
 mynet.to(device)
 print(mynet)
 train(mynet, data_size=100, steps=1000)
+

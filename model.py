@@ -1,14 +1,10 @@
-import os
-import random
-
 import torch
 from torch import nn
-from torchvision.transforms import Compose, Resize, CenterCrop, ToTensor, Normalize
-from PIL import Image, ImageDraw, ImageFont
-import math
+from torchvision.transforms import Compose, ToTensor
 
 available_volumes = [1.5, 5, 12, 19]
-available_percents = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+DEFAULT_DEVICE = "cpu"
+DEFAULT_MODEL_PATH = "mynet.net"
 
 
 class BasicBlock(nn.Module):
@@ -103,54 +99,17 @@ class ResNet(nn.Module):
         return x.double()
 
 
-device = "cpu"
+class Model:
+    def __init__(self, device=DEFAULT_DEVICE, model_path=DEFAULT_MODEL_PATH):
+        self.preprocess = Compose([
+            ToTensor()
+        ])
+        self.net = torch.load(model_path, map_location=torch.device(device))
 
-preprocess = Compose([
-    ToTensor()
-])
+    def process(self, image):
+        inputs = torch.stack([self.preprocess(image).clone().detach()])
+        outputs = self.net(inputs)
+        volume = min(available_volumes, key=lambda x: abs(x - float(outputs[0][0])))
+        percent = int(outputs[0][1])
+        return volume, percent
 
-print(f"Using {device} device")
-
-mynet = torch.load('mynet')
-mynet.to(device)
-# print(mynet)
-
-data = []
-
-for root, subdirs, files in os.walk('dataset/5'):
-    if not subdirs:
-        x, volume, percent = root.split('/')
-        for file in files:
-            data.append({'volume': volume, 'percent': percent, 'filename': f"{root}/{file}"})
-
-random_data = random.choice(data)
-
-img_name = random_data['filename']
-
-print(random_data['volume'], random_data['percent'])
-
-img = Image.open(img_name).convert('RGB')
-inputs = torch.stack([preprocess(img).clone().detach()])
-# inputs.to(device)
-
-outputs = mynet(inputs)
-print(outputs)
-
-candidate_index = torch.argmax(outputs)
-print(candidate_index)
-
-volume_index = math.ceil(candidate_index / len(available_percents))
-percent_index = candidate_index % len(available_percents)
-
-volume = available_volumes[volume_index]
-percent = available_percents[percent_index]
-
-print(volume, percent)
-
-result = ImageDraw.Draw(img)
-myFont = ImageFont.truetype('FreeMono.ttf', 36)
-result.text((30, 320), f"Объем: {volume}л., Наполнение: {percent}%",
-            font=myFont, fill=(255, 255, 255), stroke_fill=(255, 255, 255), stroke_width=1)
-
-
-img.save('result.jpg')

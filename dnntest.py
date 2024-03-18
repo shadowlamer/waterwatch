@@ -1,5 +1,6 @@
+
 import os
-import random
+from model import ResNet, BasicBlock, available_volumes, available_percents
 
 import numpy as np
 import torch
@@ -10,102 +11,20 @@ import torch.optim as optim
 import pandas as pd
 from PIL import Image
 
-batch_size = 32
+batch_size = 48
 
-criterion = nn.MSELoss(reduction='sum')
-
-
-class BasicBlock(nn.Module):
-    expansion = 1
-
-    def __init__(self, inplanes, planes, stride=1, downsample=None):
-        super().__init__()
-        self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=3, stride=stride,
-                               padding=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(planes)
-        self.relu = nn.ReLU(inplace=True)
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=1,
-                               padding=1, bias=False)
-        self.bn2 = nn.BatchNorm2d(planes)
-        self.downsample = downsample
-        self.stride = stride
-
-    def forward(self, x):
-        identity = x
-
-        out = self.conv1(x)
-        out = self.bn1(out)
-        out = self.relu(out)
-
-        out = self.conv2(out)
-        out = self.bn2(out)
-
-        if self.downsample is not None:
-            identity = self.downsample(x)
-
-        out += identity
-        out = self.relu(out)
-
-        return out
+num_classes_to_learn = len(available_volumes) * len(available_percents) + 3
 
 
-class ResNet(nn.Module):
+celoss = nn.CrossEntropyLoss(reduction='sum')
+l2loss = nn.MSELoss(reduction='mean')
 
-    def __init__(self, block, layers, num_classes=2):
-        super().__init__()
 
-        self.inplanes = 64
-
-        self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=7, stride=2, padding=3,
-                               bias=False)
-        self.bn1 = nn.BatchNorm2d(self.inplanes)
-        self.relu = nn.ReLU(inplace=True)
-        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-
-        self.layer1 = self._make_layer(block, 64, layers[0])
-        self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
-        self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
-        self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
-
-        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(512, num_classes)
-
-    def _make_layer(self, block, planes, blocks, stride=1):
-        downsample = None
-
-        if stride != 1 or self.inplanes != planes:
-            downsample = nn.Sequential(
-                nn.Conv2d(self.inplanes, planes, 1, stride, bias=False),
-                nn.BatchNorm2d(planes),
-            )
-
-        layers = []
-        layers.append(block(self.inplanes, planes, stride, downsample))
-
-        self.inplanes = planes
-
-        for _ in range(1, blocks):
-            layers.append(block(self.inplanes, planes))
-
-        return nn.Sequential(*layers)
-
-    def forward(self, x):
-        x = self.conv1(x)  # 224x224
-        x = self.bn1(x)
-        x = self.relu(x)
-        x = self.maxpool(x)  # 112x112
-
-        x = self.layer1(x)  # 56x56
-        x = self.layer2(x)  # 28x28
-        x = self.layer3(x)  # 14x14
-        x = self.layer4(x)  # 7x7
-
-        x = self.avgpool(x)  # 1x1
-        x = torch.flatten(x, 1)  # remove 1 X 1 grid and make vector of tensor shape
-        x = self.fc(x)
-
-        return x.double()
-
+def create_classes_array(_list_size, _certain_class):
+    result = [0.0] * _list_size
+    if _certain_class is not None:
+        result[_certain_class] = 1.0
+    return np.array(result)
 
 class ImagesDataset(Dataset):
     def __init__(self, root_dir, transform=None):
@@ -114,9 +33,14 @@ class ImagesDataset(Dataset):
 
         for root, subdirs, files in os.walk(root_dir):
             if not subdirs:
-                x, volume, percent = root.split('/')
-                for file in files:
-                    self.data.append({'volume': volume, 'percent': percent, 'filename': f"{root}/{file}"})
+                try:
+                    x, volume, percent = root.split('/')
+                    for file in files:
+                        self.data.append({'type': 'bottle', 'volume': volume, 'percent': percent, 'filename': f"{root}/{file}"})
+                except:
+                    x, xtype = root.split('/')
+                    for file in files:
+                        self.data.append({'type': xtype, 'filename': f"{root}/{file}"})
 
         # print(self.data)
 
@@ -130,13 +54,27 @@ class ImagesDataset(Dataset):
         if torch.is_tensor(idx):
             idx = idx.tolist()
 
-        img_hash = np.array([float(self.data[idx]['volume']), float(self.data[idx]['percent'])])
+        xtype = self.data[idx]['type']
+
+        if xtype == 'bottle':
+            volume = float(self.data[idx]['volume'])
+            percent = float(self.data[idx]['percent'])
+            class_to_learn = available_volumes.index(volume) * len(available_percents) + available_percents.index(percent)
+            img_hash = create_classes_array(num_classes_to_learn, class_to_learn)
+        elif xtype == 'incident':
+            img_hash = create_classes_array(num_classes_to_learn, num_classes_to_learn - 1)
+        elif xtype == 'hands':
+            img_hash = create_classes_array(num_classes_to_learn, num_classes_to_learn - 2)
+        elif xtype == 'empty':
+            img_hash = create_classes_array(num_classes_to_learn, num_classes_to_learn - 3)
+        else:
+            img_hash = create_classes_array(num_classes_to_learn, None)
+
         img_name = self.data[idx]['filename']
         # print(img_name)
         img = Image.open(img_name).convert('RGB')
         t = self.transform(img).clone().detach()
-        sample = [t, img_hash]
-
+        sample = [t, img_hash, img_name]
         return sample
 
 
@@ -151,7 +89,7 @@ def train(net, data_size=100, steps=100):
         running_loss = 0.0
         for i, data in enumerate(trainloader, 0):
             # get the inputs; data is a list of [inputs, labels]
-            inputs, labels = data
+            inputs, labels, names = data
             inputs = inputs.to(device)
             labels = labels.to(device)
 
@@ -161,7 +99,16 @@ def train(net, data_size=100, steps=100):
             # forward + backward + optimize
             outputs = net(inputs)
 
-            loss = criterion(outputs, labels)
+            loss = l2loss(outputs, labels) * celoss(outputs, labels)
+
+            if i == 0:
+                print(inputs)
+                print(names[0])
+                print(['%.4f' % elem for elem in outputs[0].tolist()])
+                print(['%.4f' % elem for elem in labels[0].tolist()])
+
+                print(torch.argmax(outputs[0]).item())
+                print(torch.argmax(labels[0]).item())
 
             loss.backward()
             optimizer.step()
@@ -170,9 +117,10 @@ def train(net, data_size=100, steps=100):
             running_loss += loss.item()
             # print(loss.item())
 
-            print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / data_size:.8f}')
+            print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss:.8f}')
+
             running_loss = 0.0
-        torch.save(net, 'mynet_' + str(epoch))
+        # torch.save(net, 'mynet')
     print('Finished Training')
 
 
@@ -184,11 +132,10 @@ preprocess = Compose([
 
 print(f"Using {device} device")
 
-# mynet.net = torch.load('mynet.net')
-
-mynet = ResNet(BasicBlock, [3, 4, 6, 3])
-
+# mynet = torch.load('_mynet')
+torch
+mynet = ResNet(BasicBlock, [3, 4, 6, 3], num_classes_to_learn)
 mynet.to(device)
+
 print(mynet)
 train(mynet, data_size=100, steps=1000)
-

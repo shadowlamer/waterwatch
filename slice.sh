@@ -14,4 +14,4 @@ FPS=$(echo "scale=4; ${MAX_VOLUME_PERCENT} * ${IMAGES_PER_PERCENT} / ${VIDEO_DUR
 mkdir -p "${IMAGES_DIR}"
 rm -f "${IMAGES_DIR}/*.jpg"
 
-ffmpeg -i "${VIDEO}" -t ${VIDEO_DURATION} -vf fps=${FPS},scale=720:360 "${IMAGES_DIR}/$(basename ${VIDEO})%05d.jpg"
+ffmpeg -i "${VIDEO}" -t ${VIDEO_DURATION} -vf fps=${FPS},scale=640:360 "${IMAGES_DIR}/$(basename ${VIDEO})%05d.jpg"

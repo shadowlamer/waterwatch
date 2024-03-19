@@ -9,3 +9,7 @@ for VOLUME in ${VOLUMES}; do
     mkdir -p "${ROOT}/${VOLUME}/${PERCENT}"
   done
 done
+
+mkdir -p "${ROOT}/empty"
+mkdir -p "${ROOT}/hands"
+mkdir -p "${ROOT}/incident"

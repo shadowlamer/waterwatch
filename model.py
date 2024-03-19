@@ -7,7 +7,7 @@ DEFAULT_DEVICE = "cpu"
 DEFAULT_MODEL_PATH = "mynet.net"
 
 available_volumes = [1.5, 5, 12, 19]
-available_percents = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+available_percents = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
 
 
 class BasicBlock(nn.Module):
